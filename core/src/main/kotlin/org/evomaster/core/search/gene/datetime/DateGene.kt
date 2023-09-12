@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import kotlin.math.abs
 
 
 /**
@@ -114,7 +115,13 @@ class DateGene(
         targetFormat: OutputFormat?,
         extraCheck: Boolean
     ): String {
-        return if(mode == GeneUtils.EscapeMode.EJSON) "{\"\$date\":\"${getValueAsRawString()}\"}" else "\"${getValueAsRawString()}\""
+        return if (mode == GeneUtils.EscapeMode.EJSON) {
+            // Temporary
+            val millis = abs(milliseconds())
+            "{\"\$date\":{\"\$numberLong\":\"$millis\"}}"
+        } else {
+            "\"${getValueAsRawString()}\""
+        }
     }
 
     override fun getValueAsRawString(): String {
@@ -227,4 +234,32 @@ class DateGene(
         return false
     }
 
+
+    fun isLeapYear(year: Int): Boolean {
+        return (year % 4 == 0) && (year % 100 != 0 || year % 400 == 0)
+    }
+
+    fun daysInMonth(month: Int, year: Int): Int {
+        return when (month) {
+            2 -> if (isLeapYear(year)) 29 else 28
+            4, 6, 9, 11 -> 30
+            else -> 31
+        }
+    }
+
+    fun milliseconds(): Long {
+        var totalMilliseconds: Long = 0
+
+        for (y in year.value until 1970) {
+            totalMilliseconds -= if (isLeapYear(y)) 366 * 24 * 60 * 60 * 1000L else 365 * 24 * 60 * 60 * 1000L
+        }
+
+        for (m in 1 until month.value) {
+            totalMilliseconds -= daysInMonth(m, year.value) * 24 * 60 * 60 * 1000L
+        }
+
+        totalMilliseconds -= (day.value - 1) * 24 * 60 * 60 * 1000L
+
+        return totalMilliseconds
+    }
 }

@@ -42,7 +42,10 @@ public class MongoScriptRunner {
                 Object document = parseEJSON(insertionDto.data);
                 insertDocument(connection, insertionDto.databaseName, insertionDto.collectionName, document);
                 mongoResults.set(i, true);
-                SimpleLogger.debug(insertionDto.data + " inserted into database: " + insertionDto.databaseName + " and collection: " + insertionDto.collectionName);
+                SimpleLogger.info("Inserted document: " + insertionDto.data + " into database: " + insertionDto.databaseName + " and collection: " + insertionDto.collectionName);
+            } catch (InvocationTargetException e) {
+                String msg = "Failed to execute insertion with index " + i + " with Mongo. Error: " + e.getTargetException().getMessage() + " " + insertionDto.data;
+                throw new RuntimeException(msg, e);
             } catch (Exception e) {
                 String msg = "Failed to execute insertion with index " + i + " with Mongo. Error: " + e.getMessage();
                 throw new RuntimeException(msg, e);

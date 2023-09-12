@@ -3,6 +3,7 @@ package org.evomaster.core.output
 import org.apache.commons.lang3.StringEscapeUtils
 import org.evomaster.core.search.EvaluatedMongoDbAction
 import org.evomaster.core.search.gene.ObjectGene
+import org.evomaster.core.search.gene.utils.GeneUtils
 
 /**
  * Class used to generate the code in the test dealing with insertion of
@@ -53,7 +54,7 @@ object MongoWriter {
                                 .forEach { g ->
                                     when (g) {
                                         is ObjectGene -> {
-                                            val printableValue = StringEscapeUtils.escapeJava(g.getValueAsPrintableString())
+                                            val printableValue = StringEscapeUtils.escapeJava(g.getValueAsPrintableString(mode = GeneUtils.EscapeMode.EJSON))
                                             lines.add(".d(\"$printableValue\")")
                                         }
 

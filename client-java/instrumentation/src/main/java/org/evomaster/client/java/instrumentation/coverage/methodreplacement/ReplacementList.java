@@ -30,6 +30,7 @@ public class ReplacementList {
                     new ByteClassReplacement(),
                     new CharacterClassReplacement(),
                     new CollectionClassReplacement(),
+                    new CursorPreparerClassReplacement(),
                     new DateClassReplacement(),
                     new DateFormatClassReplacement(),
                     new DoubleClassReplacement(),

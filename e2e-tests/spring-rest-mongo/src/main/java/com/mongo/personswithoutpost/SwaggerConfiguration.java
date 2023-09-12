@@ -1,9 +1,11 @@
-package com.mongo;
+package com.mongo.personswithoutpost;
 
+import com.mongo.personswithoutpost.constant.Constant;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.context.request.WebRequest;
 import springfox.documentation.builders.ApiInfoBuilder;
+import springfox.documentation.builders.PathSelectors;
 import springfox.documentation.service.ApiInfo;
 import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spring.web.plugins.Docket;
@@ -23,7 +25,7 @@ public class SwaggerConfiguration {
         return new Docket(DocumentationType.SWAGGER_2)
                 .apiInfo(apiInfo())
                 .select()
-                .paths(regex("/" + path + "/.*"))
+                .paths(PathSelectors.any())
                 .build()
                 .ignoredParameterTypes(WebRequest.class, Authentication.class);
     }

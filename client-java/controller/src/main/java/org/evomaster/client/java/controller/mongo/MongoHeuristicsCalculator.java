@@ -66,6 +66,8 @@ public class MongoHeuristicsCalculator {
         if (operation instanceof TypeOperation) return calculateDistanceForType((TypeOperation) operation, doc);
         if (operation instanceof InvertedTypeOperation)
             return calculateDistanceForInvertedType((InvertedTypeOperation) operation, doc);
+        if (operation instanceof NearSphereOperation)
+            return calculateDistanceForNearSphere((NearSphereOperation) operation, doc);
         return Double.MAX_VALUE;
     }
 
@@ -108,10 +110,7 @@ public class MongoHeuristicsCalculator {
     }
 
     private double calculateDistanceForOr(OrOperation operation, Object doc) {
-        return operation.getConditions().stream()
-                .mapToDouble(condition -> calculateDistance(condition, doc))
-                .min()
-                .getAsDouble();
+        return operation.getConditions().stream().mapToDouble(condition -> calculateDistance(condition, doc)).min().getAsDouble();
     }
 
     private double calculateDistanceForAnd(AndOperation operation, Object doc) {
@@ -123,10 +122,7 @@ public class MongoHeuristicsCalculator {
         Object actualValue = getValue(doc, operation.getFieldName());
 
         if (actualValue instanceof List<?>) {
-            return expectedValues.stream()
-                    .mapToDouble(value -> distanceToClosestElem((List<?>) actualValue, value))
-                    .min()
-                    .getAsDouble();
+            return expectedValues.stream().mapToDouble(value -> distanceToClosestElem((List<?>) actualValue, value)).min().getAsDouble();
         } else {
             return distanceToClosestElem(expectedValues, actualValue);
         }
@@ -196,14 +192,11 @@ public class MongoHeuristicsCalculator {
 
         if (actualValue instanceof List<?>) {
             List<?> val = (List<?>) actualValue;
-            return val.stream()
-                    .mapToDouble(elem -> {
-                        Object newDoc = newDocument(doc);
-                        appendToDocument(newDoc, operation.getFieldName(), elem);
-                        return calculateDistance(operation.getCondition(), newDoc);
-                    })
-                    .min()
-                    .getAsDouble();
+            return val.stream().mapToDouble(elem -> {
+                Object newDoc = newDocument(doc);
+                appendToDocument(newDoc, operation.getFieldName(), elem);
+                return calculateDistance(operation.getCondition(), newDoc);
+            }).min().getAsDouble();
         } else {
             return Double.MAX_VALUE;
         }
@@ -214,10 +207,7 @@ public class MongoHeuristicsCalculator {
         Set<String> actualFields = documentKeys(doc);
 
         if (operation.getBoolean()) {
-            return actualFields.stream()
-                    .mapToDouble(field -> DistanceHelper.getLeftAlignmentDistance(field, expectedField))
-                    .min()
-                    .getAsDouble();
+            return actualFields.stream().mapToDouble(field -> DistanceHelper.getLeftAlignmentDistance(field, expectedField)).min().getAsDouble();
         } else {
             return !documentContainsField(doc, expectedField) ? 0.0 : MIN_DISTANCE_TO_TRUE_VALUE;
         }
@@ -279,6 +269,45 @@ public class MongoHeuristicsCalculator {
         String actualType = value == null ? null : value.getClass().getTypeName();
 
         return !Objects.equals(actualType, expectedType) ? 0.0 : MIN_DISTANCE_TO_TRUE_VALUE;
+    }
+
+    private double calculateDistanceForNearSphere(NearSphereOperation operation, Object doc) {
+        String field = operation.getFieldName();
+        Object actualPoint = getValue(doc, field);
+
+        double x1 = operation.getX();
+        double y1 = operation.getY();
+        double x2;
+        double y2;
+
+        // GeoJsonPoint in document
+        if (isDocument(actualPoint) &&
+                getValue(actualPoint, "type").equals("Point") &&
+                getValue(actualPoint, "coordinates") instanceof List<?>) {
+
+            List<?> coordinates = (List<?>) getValue(actualPoint, "coordinates");
+            x2 = Math.toRadians((double) coordinates.get(0));
+            y2 = Math.toRadians((double) coordinates.get(1));
+        } else {
+            return Double.MAX_VALUE;
+        }
+
+        double radius = 6371.0; // Earth's radius in kilometers
+
+        double phi1 = Math.PI / 2.0 - y1;
+        double phi2 = Math.PI / 2.0 - y2;
+        double deltaPhi = phi2 - phi1;
+        double deltaLambda = x2 - x1;
+
+        double a = Math.sin(deltaPhi / 2.0) * Math.sin(deltaPhi / 2.0) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2.0) * Math.sin(deltaLambda / 2.0);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double distanceBetweenPoints = radius * c;
+
+        double max = operation.getMaxDistance() == null ? Double.MAX_VALUE : operation.getMaxDistance();
+        double min = operation.getMinDistance() == null ? 0.0 : operation.getMinDistance();
+
+        return (min <= distanceBetweenPoints) && (distanceBetweenPoints <= max) ?  0.0 : Math.abs(distanceBetweenPoints - max) ;
     }
 
     private QueryOperation invertOperation(QueryOperation operation) {
@@ -386,10 +415,26 @@ public class MongoHeuristicsCalculator {
             return val1 == val2 ? 0d : 1d;
         }
 
+        if (val1 instanceof String && val2.getClass().getName().equals("org.bson.types.ObjectId")) {
+            return (double) DistanceHelper.getLeftAlignmentDistance((String) val1, val2.toString());
+        }
+
+        if (val2 instanceof String && val1.getClass().getName().equals("org.bson.types.ObjectId")) {
+            return (double) DistanceHelper.getLeftAlignmentDistance(val1.toString(), (String) val2);
+        }
+
+
+        if (val2.getClass().getName().equals("org.bson.types.ObjectId") && val1.getClass().getName().equals("org.bson.types.ObjectId")) {
+            return (double) DistanceHelper.getLeftAlignmentDistance(val1.toString(), val2.toString());
+        }
+
+
         if (val1 instanceof List<?> && val2 instanceof List<?>) {
             // Modify
             return Double.MAX_VALUE;
         }
+
+        System.out.println("Impossible to calculate distance");
 
         return Double.MAX_VALUE;
     }

@@ -92,7 +92,7 @@ public class ClassToSchema {
                 UnitsInfoRecorder.registerNewParsedDto(name, schema);
                 ExecutionTracer.addParsedDtoName(name);
                 if (!embedded.isEmpty()){
-                    embedded.forEach(ClassToSchema::registerSchemaIfNeeded);
+                    embedded.forEach(e -> registerSchemaIfNeeded(e, objectFieldsRequired));
                 }
 
             }
@@ -290,6 +290,12 @@ public class ClassToSchema {
                 //TODO not 100% sure this is correct...
                 return fieldSchema("integer", "int64");
             }
+            if (Date.class.isAssignableFrom(klass)) {
+                return fieldSchema("string", "date");
+            }
+            if (klass.getName().equals("org.springframework.data.mongodb.core.geo.GeoJsonPoint")) {
+                return fieldGeoJsonPointSchema();
+            }
         }
         //TODO date fields
 
@@ -333,12 +339,15 @@ public class ClassToSchema {
                 }
                 String fieldName = getName(f);
                 String fieldSchema = null;
-                if (allNested) {
-                    fieldSchema = named(fieldName, getSchema(f.getGenericType(), true, nested, true, objectFieldsRequired));
-                } else
-                    fieldSchema = getOrDeriveSchema(fieldName, f.getGenericType(), true, nested, objectFieldsRequired);
-                properties.add(fieldSchema);
-                propertiesNames.add("\"" + fieldName + "\"");
+                // Modify
+                if(!Objects.equals(fieldName, "_id")) {
+                    if (allNested) {
+                        fieldSchema = named(fieldName, getSchema(f.getGenericType(), true, nested, true, objectFieldsRequired));
+                    } else
+                        fieldSchema = getOrDeriveSchema(fieldName, f.getGenericType(), true, nested, objectFieldsRequired);
+                    properties.add(fieldSchema);
+                    propertiesNames.add("\"" + fieldName + "\"");
+                }
             }
             target = target.getSuperclass();
         }
@@ -463,6 +472,10 @@ public class ClassToSchema {
 
     private static String fieldEnumSchema(String[] items) {
         return "{\"type\":\"string\", \"enum\":[" + Arrays.stream(items).map(s -> "\"" + s + "\"").collect(Collectors.joining(",")) + "]}";
+    }
+
+    private static String fieldGeoJsonPointSchema() {
+        return "{\"type\":\"object\", \"properties\": {\"coordinates\": {\"type\":\"array\", \"items\":{\"type\":\"number\", \"format\":\"double\"}, \"minItems\": 2,  \"maxItems\": 2}, \"type\": {\"type\":\"string\", \"enum\":[\"Point\"]}}, \"required\": [\"coordinates\", \"type\"]}";
     }
 
     /*

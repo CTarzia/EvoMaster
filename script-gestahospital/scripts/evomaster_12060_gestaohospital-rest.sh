@@ -1,0 +1,11 @@
+#!/bin/bash 
+
+"/Library/Java/JavaVirtualMachines/jdk1.8.0_121.jdk/Contents/Home/bin/java"  -Xms16G -Xmx16G -Dem.muteSUT=false -Devomaster.instrumentation.jar.path="/Users/hernanghianni/Downloads/evomaster-client-java-instrumentation-1.6.2.jar" -jar "/Users/hernanghianni/Desktop/EMB/dist/gestaohospital-rest-evomaster-runner.jar"  12060 12061 "/Users/hernanghianni/Desktop/EMB/dist/gestaohospital-rest-sut.jar" 1200 "/Library/Java/JavaVirtualMachines/jdk1.8.0_121.jdk/Contents/Home/bin/java"  > "/Users/hernanghianni/Desktop/EvoMaster original/EvoMaster/foo7/logs/evomaster/log_sut_gestaohospital-rest_12060.txt" 2>&1 &
+
+CONTROLLER_PID=$! 
+
+sleep 20
+
+"/Library/Java/JavaVirtualMachines/jdk1.8.0_121.jdk/Contents/Home/bin/java"  -Xms16G -Xmx16G  -jar "/Users/hernanghianni/Downloads/evomaster.jar"  --testSuiteFileName=EM_default_0_Test --labelForExperiments=default --stoppingCriterion=FITNESS_EVALUATIONS --maxActionEvaluations=50000  --useTimeInFeedbackSampling=false --statisticsColumnId=gestaohospital-rest  --sutControllerPort=12060 --outputFolder="/Users/hernanghianni/Desktop/EvoMaster original/EvoMaster/foo7/tests/gestaohospital-rest" --statisticsFile="/Users/hernanghianni/Desktop/EvoMaster original/EvoMaster/foo7/reports/statistics_gestaohospital-rest_default_0.csv" --snapshotInterval=5 --snapshotStatisticsFile="/Users/hernanghianni/Desktop/EvoMaster original/EvoMaster/foo7/reports/snapshot_gestaohospital-rest_default_0.csv" --appendToStatisticsFile=true --generateSqlDataWithSearch=false --heuristicsForSQL=false --extractSqlExecutionInfo=false --generateMongoData=true --extractMongoExecutionInfo=true --heuristicsForMongo=true --instrumentMR_MONGO=true --writeStatistics=true --seed=20 --enableWeightBasedMutationRateSelectionForGene=false --showProgress=true --testSuiteSplitType=NONE --exportCoveredTarget=true --coveredTargetFile="/Users/hernanghianni/Desktop/EvoMaster original/EvoMaster/foo7/reports/covered_target_file_gestaohospital-rest_default_0.txt" --externalServiceIP=127.0.0.122 --probOfHarvestingResponsesFromActualExternalServices=0 >> "/Users/hernanghianni/Desktop/EvoMaster original/EvoMaster/foo7/logs/evomaster/log_em_gestaohospital-rest_12060.txt" 2>&1
+
+kill $CONTROLLER_PID

@@ -82,10 +82,12 @@ public class MongoHandler {
     }
 
     public void handle(MongoInfo info) {
+        System.out.println("Received find command with query: " + info.getQuery());
         if (extractMongoExecution) operations.add(info);
     }
 
     public void handle(MongoCollectionInfo info) {
+        System.out.println("doc is" + info.getDocumentsType());
         if (extractMongoExecution) collectionInfo.put(info.getCollectionName(), info.getDocumentsType());
     }
 
@@ -124,9 +126,13 @@ public class MongoHandler {
 
         for (Object doc : documents) {
             double dist = calculator.computeExpression(info.getQuery(), doc);
-            if (dist == 0) return 0;
+            if (dist == 0) {
+                System.out.println("Distance between query " + info.getQuery() + "and document " + doc.toString() + "is 0");
+                return 0;
+            }
             if (dist < min) min = dist;
         }
+        System.out.println("Distance for query " + info.getQuery() + " is " + min);
         return min;
     }
 

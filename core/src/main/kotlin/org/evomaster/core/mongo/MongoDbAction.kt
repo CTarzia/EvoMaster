@@ -3,6 +3,8 @@ package org.evomaster.core.mongo
 import org.evomaster.core.problem.rest.RestActionBuilderV3.createObjectGenesForDTOs
 import org.evomaster.core.search.Action
 import org.evomaster.core.search.gene.Gene
+import org.evomaster.core.search.gene.ObjectGene
+import org.evomaster.core.search.gene.mongo.ObjectIdGene
 import java.util.*
 
 class MongoDbAction(
@@ -25,11 +27,11 @@ class MongoDbAction(
 
     private fun computeGenes(): List<Gene> {
         val documentsTypeName = documentsType.substringBefore(":").drop(1).dropLast(1)
-        return Collections.singletonList(
-            createObjectGenesForDTOs(
-                documentsTypeName, documentsType, false
+        val gene = createObjectGenesForDTOs(
+                documentsTypeName, documentsType, true
             )
-        )
+        gene as ObjectGene
+        return Collections.singletonList(ObjectGene(gene.name, gene.fixedFields + (Collections.singletonList(ObjectIdGene("_id")))))
     }
 
     override fun getName(): String {
