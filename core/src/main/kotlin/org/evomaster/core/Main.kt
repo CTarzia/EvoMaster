@@ -16,6 +16,7 @@ import org.evomaster.core.output.OutputFormat
 import org.evomaster.core.output.Termination
 import org.evomaster.core.output.TestSuiteSplitter
 import org.evomaster.core.output.clustering.SplitResult
+import org.evomaster.core.output.service.EpaWriter
 import org.evomaster.core.output.service.TestSuiteWriter
 import org.evomaster.core.problem.api.ApiWsIndividual
 import org.evomaster.core.problem.externalservice.httpws.service.HarvestActualHttpWsResponseHandler
@@ -176,6 +177,10 @@ class Main {
 
             var solution = run(injector, controllerInfo)
 
+            if (config.epaCalculation) {
+                LoggingUtil.getInfoLogger().info("Going to write EPA to ${config.epaFile}.")
+                writeEPA(solution, config.epaFile)
+            }
             //save data regarding the search phase
             writeOverallProcessData(injector)
             writeDependencies(injector)
@@ -788,6 +793,11 @@ class Main {
             if (config.snapshotInterval > 0) {
                 statistics.writeSnapshot()
             }
+        }
+
+
+        private fun writeEPA(solution: Solution<*>, epaFile: String) {
+            EpaWriter().writeEPA(solution, epaFile)
         }
 
         private fun writeOverallProcessData(injector: Injector) {
