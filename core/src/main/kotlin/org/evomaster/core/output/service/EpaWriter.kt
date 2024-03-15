@@ -1,6 +1,5 @@
 package org.evomaster.core.output.service
 
-import org.evomaster.client.java.controller.api.dto.database.execution.epa.RestAction
 import org.evomaster.core.epa.EPA
 import org.evomaster.core.epa.Vertex
 import org.evomaster.core.logging.LoggingUtil
@@ -18,7 +17,7 @@ class EpaWriter {
             "edge [fontname=Courier fontsize=14]\n" +
             "init [shape=box]\n"
 
-    fun writeEPA(solution: Solution<*>, epaFile: String) {
+    fun writeEPA(solution: Solution<*>, timeLimit: Int, epaFile: String, epaStatsCsv: String) {
         val epa = EPA()
         for (i in solution.individuals) {
             var previousVertex: Vertex? = null
@@ -48,10 +47,10 @@ class EpaWriter {
                 }
             }
         }
-        writeToFile(epa, epaFile)
+        writeToFile(epa, timeLimit, epaFile, epaStatsCsv)
     }
 
-    private fun writeToFile(epa: EPA, epaFile: String) {
+    private fun writeToFile(epa: EPA, timeLimit: Int, epaFile: String, epaStatsCsv: String) {
         var path = Paths.get(epaFile).toAbsolutePath()
 
         Files.createDirectories(path.parent)
@@ -65,9 +64,19 @@ class EpaWriter {
         Files.deleteIfExists(path)
         Files.createFile(path)
 
-        val s = "EPA contains ${epa.getVertexCount()} vertex(es) and ${epa.getEdgeCount()} edge(s)."
+        val v = epa.getVertexCount()
+        val e = epa.getEdgeCount()
+        val s = "EPA contains $v vertex(es) and $e edge(s)."
         path.toFile().appendText(s)
         LoggingUtil.getInfoLogger().info(s)
+
+        path = Paths.get(epaStatsCsv).toAbsolutePath()
+        Files.createDirectories(path.parent)
+        val f = path.toFile()
+        if (f.length().toInt() == 0) {
+            f.appendText("timeLimitInSeconds, vertexes, edges \n")
+        }
+        f.appendText("${timeLimit}, $v, $e\n")
     }
 
     private fun toDOT(epa: EPA): String {

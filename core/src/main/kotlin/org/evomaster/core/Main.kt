@@ -226,11 +226,7 @@ class Main {
             writeCoveredTargets(injector, solution)
             writeTests(injector, solution, controllerInfo)
             writeStatistics(injector, solution) //FIXME if other phases after search, might get skewed data on 100% snapshots...
-
-            if (config.epaCalculation) {
-                LoggingUtil.getInfoLogger().info("Going to write EPA to ${config.epaFile}.")
-                writeEPA(solution, config.epaFile)
-            }
+            writeEPA(injector, solution)
 
             val statistics = injector.getInstance(Statistics::class.java)
             val data = statistics.getData(solution)
@@ -787,8 +783,16 @@ class Main {
             }
         }
 
-        private fun writeEPA(solution: Solution<*>, epaFile: String) {
-            EpaWriter().writeEPA(solution, epaFile)
+        private fun writeEPA(injector: Injector, solution: Solution<*>) {
+
+            val config = injector.getInstance(EMConfig::class.java)
+
+            if (!config.epaCalculation) {
+                return
+            }
+
+            LoggingUtil.getInfoLogger().info("Going to write EPA to ${config.epaFile}.")
+            EpaWriter().writeEPA(solution, config.timeLimitInSeconds(), config.epaFile, config.epaStatsCsv)
         }
 
         private fun writeOverallProcessData(injector: Injector) {
