@@ -10,6 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
+import static org.evomaster.client.java.instrumentation.shared.ExternalServiceSharedUtils.RESERVED_RESOLVED_LOCAL_IP;
+
 /**
  * Methods of this class will be injected in the SUT to
  * keep track of what the tests do execute/cover.
@@ -674,12 +676,17 @@ public class ExecutionTracer {
         updateBranch(className, line, branchId, t);
     }
 
+    /**
+     * To add HostnameResolution information to [AdditionalInfo]
+     */
     public static void addHostnameInfo(HostnameResolutionInfo hostnameResolutionInfo) {
         getCurrentAdditionalInfo().addHostnameInfo(hostnameResolutionInfo);
+        if (!executingAction)
+            ObjectiveRecorder.registerHostnameResolutionInfoAtSutStartupTime(hostnameResolutionInfo);
     }
 
     /**
-     * Add the external HTTP/S hostname to the additional info to keep track.
+     * To add the external service information to [AdditionalInfo]
      */
     public static void addExternalServiceHost(ExternalServiceInfo hostInfo) {
         getCurrentAdditionalInfo().addExternalService(hostInfo);
@@ -750,6 +757,10 @@ public class ExecutionTracer {
 
     public static String getLocalAddress(String hostname) {
         return localAddressMapping.get(hostname);
+    }
+
+    public static String getDefaultSinkholeAddress() {
+        return RESERVED_RESOLVED_LOCAL_IP;
     }
 
     public static boolean skipHostname(String hostname) {

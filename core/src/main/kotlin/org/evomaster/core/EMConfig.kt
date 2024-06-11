@@ -46,6 +46,8 @@ class EMConfig {
 
         private val log = LoggerFactory.getLogger(EMConfig::class.java)
 
+        private const val timeRegex = "(\\s*)((?=(\\S+))(\\d+h)?(\\d+m)?(\\d+s)?)(\\s*)"
+
         private const val headerRegex = "(.+:.+)|(^$)"
 
         private const val targetSeparator = ";"
@@ -61,7 +63,7 @@ class EMConfig {
          */
         const val stringLengthHardLimit = 20_000
 
-        private const val defaultExternalServiceIP = "127.0.0.3"
+        private const val defaultExternalServiceIP = "127.0.0.4"
 
         //leading zeros are allowed
         private const val lz = "0*"
@@ -69,9 +71,9 @@ class EMConfig {
         private const val _eip_s = "^${lz}127"
         // other numbers could be anything between 0 and 255
         private const val _eip_e = "(\\.${lz}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])){3}$"
-        // first numbers (127.0.0.0 to 127.0.0.2) are reserved
+        // first four numbers (127.0.0.0 to 127.0.0.3) are reserved
         // this is done with a negated lookahead ?!
-        private const val _eip_n = "(?!${_eip_s}(\\.${lz}0){2}\\.${lz}[012]$)"
+        private const val _eip_n = "(?!${_eip_s}(\\.${lz}0){2}\\.${lz}[0123]$)"
 
         private const val externalServiceIPRegex = "$_eip_n$_eip_s$_eip_e"
 
@@ -81,7 +83,12 @@ class EMConfig {
                                     // actual singleton instance created with Guice
 
             val parser = getOptionParser()
-            val options = parser.parse(*args)
+
+            val options = try{
+                parser.parse(*args)
+            }catch (e: joptsimple.OptionException){
+                throw ConfigProblemException("Wrong input configuration parameters. ${e.message}")
+            }
 
             if (!options.has("help")) {
                 //actual validation is done here when updating
@@ -200,7 +207,7 @@ class EMConfig {
             val max = (m.annotations.find { it is Max } as? Max)?.max
             val probability = m.annotations.find { it is Probability }
             val url = m.annotations.find { it is Url }
-            val regex = (m.annotations.find { it is Regex } as? Regex)?.regex
+            val regex = (m.annotations.find { it is Regex } as? Regex)
 
             var constraints = ""
             if (min != null || max != null || probability != null || url != null || regex != null) {
@@ -218,7 +225,7 @@ class EMConfig {
                     constraints += "URL"
                 }
                 if (regex != null) {
-                    constraints += "regex $regex"
+                    constraints += "regex ${regex.regex}"
                 }
             }
 
@@ -299,14 +306,16 @@ class EMConfig {
     }
 
     private fun handleCreateConfigPathIfMissing(properties: List<KMutableProperty<*>>) {
-        if (createConfigPathIfMissing && !Path(configPath).exists()) {
+        if (createConfigPathIfMissing && !Path(configPath).exists() && configPath == defaultConfigPath) {
 
             val cff = ConfigsFromFile()
             val important = properties.filter { it.annotations.any { a -> a is Important } }
             important.forEach {
                 var default = it.call(this).toString()
                 val type = (it.returnType.javaType as Class<*>)
-                if (default.isBlank()) {
+                if(default == "null"){
+                    default = "null"
+                }else if (default.isBlank()) {
                     default = "\"\""
                 } else if(type.isEnum || String::class.java.isAssignableFrom(type)){
                     default = "\"$default\""
@@ -315,22 +324,31 @@ class EMConfig {
                 cff.configs[it.name] = default
             }
 
-            LoggingUtil.uniqueUserInfo("Going to create configuration file at: ${Path(configPath).toAbsolutePath()}")
-            ConfigUtil.createConfigFileTemplateToml(configPath, cff)
+            if(! avoidNonDeterministicLogs) {
+                LoggingUtil.uniqueUserInfo("Going to create configuration file at: ${Path(configPath).toAbsolutePath()}")
+            }
+            ConfigUtil.createConfigFileTemplate(configPath, cff)
         }
     }
 
     private fun loadConfigFile(): ConfigsFromFile?{
 
         //if specifying one manually, file MUST exist. otherwise might be missing
-
-        if(configPath == defaultConfigPath && !Path(configPath).exists()) {
-            return null
+        if(!Path(configPath).exists()) {
+            if (configPath == defaultConfigPath) {
+                return null
+            } else {
+                throw ConfigProblemException("There is no configuration file at custom path: $configPath")
+            }
         }
 
-        LoggingUtil.uniqueUserInfo("Loading configuration file from: ${Path(configPath).toAbsolutePath()}")
+        if(! avoidNonDeterministicLogs) {
+            LoggingUtil.uniqueUserInfo("Loading configuration file from: ${Path(configPath).toAbsolutePath()}")
+        }
 
-        return ConfigUtil.readFromToml(configPath)
+        val cf = ConfigUtil.readFromFile(configPath)
+        cf.validateAndNormalizeAuth()
+        return cf
     }
 
     private fun applyConfigFromFile(cff: ConfigsFromFile) {
@@ -429,6 +447,10 @@ class EMConfig {
                     " EvoMaster from bombarding such service with HTTP requests.")
         }
 
+        if (!blackBox && outputFormat == OutputFormat.PYTHON_UNITTEST) {
+            throw ConfigProblemException("Python output is used only for black-box testing")
+        }
+
         when (stoppingCriterion) {
             StoppingCriterion.TIME -> if (maxActionEvaluations != defaultMaxActionEvaluations) {
                 throw ConfigProblemException("Changing number of max actions, but stopping criterion is time")
@@ -490,7 +512,7 @@ class EMConfig {
         }
 
         // Clustering constraints: the executive summary is not really meaningful without the clustering
-        if (executiveSummary && testSuiteSplitType != TestSuiteSplitType.CLUSTER) {
+        if (executiveSummary && testSuiteSplitType != TestSuiteSplitType.FAULTS) {
             executiveSummary = false
             LoggingUtil.uniqueUserWarn("The option to turn on Executive Summary is only meaningful when clustering is turned on (--testSuiteSplitType CLUSTERING). " +
                     "The option has been deactivated for this run, to prevent a crash.")
@@ -530,6 +552,15 @@ class EMConfig {
 
         if (heuristicsForEpa && !epaCalculation) {
             throw ConfigProblemException("Cannot collect heuristics for EPAs if 'epaCalculation' is not enabled.")
+        }
+        
+        if(security && !minimize){
+            throw ConfigProblemException("The use of 'security' requires 'minimize'")
+        }
+
+        if(prematureStop.isNotEmpty() && stoppingCriterion != StoppingCriterion.TIME){
+            throw ConfigProblemException("The use of 'prematureStop' is meaningful only if the stopping criterion" +
+                    " 'stoppingCriterion' is based on time")
         }
     }
 
@@ -668,7 +699,7 @@ class EMConfig {
                 m.setter.call(this, java.lang.Double.parseDouble(optionValue))
 
             } else if (java.lang.Boolean.TYPE.isAssignableFrom(returnType)) {
-                m.setter.call(this, java.lang.Boolean.parseBoolean(optionValue))
+                m.setter.call(this, parseBooleanStrict(optionValue))
 
             } else if (java.lang.String::class.java.isAssignableFrom(returnType)) {
                 m.setter.call(this, optionValue)
@@ -686,6 +717,14 @@ class EMConfig {
         }
     }
 
+    private fun parseBooleanStrict(s: String?) : Boolean{
+        if(s==null){
+            throw IllegalArgumentException("value is 'null'")
+        }
+        if(s.equals("true", true)) return true
+        if(s.equals("false", true)) return false
+        throw IllegalArgumentException("Invalid boolean value: $s")
+    }
 
     fun shouldGenerateSqlData() = isMIO() && (generateSqlDataWithDSE || generateSqlDataWithSearch)
 
@@ -833,7 +872,6 @@ class EMConfig {
 
     //----- "Important" options, sorted by priority --------------
 
-
     val defaultMaxTime = "60s"
 
     @Important(1.0)
@@ -849,15 +887,37 @@ class EMConfig {
             " For how long should _EvoMaster_ be left run?" +
             " The default 1 _minute_ is just for demonstration." +
             " __We recommend to run it between 1 and 24 hours__, depending on the size and complexity " +
-            " of the tested application."
+            " of the tested application." +
+            " You can get better results by combining this option with `--prematureStop`." +
+            " For example, something like `--maxTime 24h --prematureStop 1h` will run the search for 24 hours," +
+            " but the it will stop at any point in time in which there has be no improvement in last hour."
     )
-    @Regex("(\\s*)((?=(\\S+))(\\d+h)?(\\d+m)?(\\d+s)?)(\\s*)")
+    @Regex(timeRegex)
     var maxTime = defaultMaxTime
 
-    @Important(2.0)
+    @Experimental
+    @Cfg("Max amount of time the search is going to wait since last improvement (on metrics we optimize for," +
+            " like fault finding and code/schema coverage)." +
+            " If there is no improvement within this allotted max time, then the search will be prematurely stopped," +
+            " regardless of what specified in --maxTime option.")
+    @Regex("($timeRegex)|(^$)")
+    var prematureStop : String = ""
+
+
+    @Important(1.1)
     @Cfg("The path directory of where the generated test classes should be saved to")
     @Folder
     var outputFolder = "src/em"
+
+
+    val defaultConfigPath = "em.yaml"
+
+    @Important(1.2)
+    @Cfg("File path for file with configuration settings. Supported formats are YAML and TOML." +
+            " When EvoMaster starts, it will read such file and import all configurations from it.")
+    @Regex(".*\\.(yml|yaml|toml)")
+    @FilePath
+    var configPath: String = defaultConfigPath
 
 
     @Important(2.0)
@@ -1011,21 +1071,20 @@ class EMConfig {
 
     enum class TestSuiteSplitType {
         NONE,
-        CLUSTER,
-        CODE
+        FAULTS
+        //CODE //This was never properly implemented
     }
 
     @Cfg("Instead of generating a single test file, it could be split in several files, according to different strategies")
-    var testSuiteSplitType = TestSuiteSplitType.CLUSTER
+    var testSuiteSplitType = TestSuiteSplitType.FAULTS
 
     @Experimental
     @Cfg("Specify the maximum number of tests to be generated in one test suite. " +
             "Note that a negative number presents no limit per test suite")
     var maxTestsPerTestSuite = -1
 
-    @Cfg("Generate an executive summary, containing an example of each category of potential fault found." +
-            "NOTE: This option is only meaningful when used in conjuction with clustering. " +
-            "This is achieved by turning the option --testSuiteSplitType to CLUSTER")
+    @Cfg("Generate an executive summary, containing an example of each category of potential faults found." +
+            "NOTE: This option is only meaningful when used in conjunction with test suite splitting.")
     var executiveSummary = true
 
     @Cfg("The Distance Metric Last Line may use several values for epsilon." +
@@ -1817,6 +1876,27 @@ class EMConfig {
     var useGlobalTaintInfoProbability = 0.0
 
 
+    @Experimental
+    @Cfg("If there is new discovered information from a test execution, reward it in the fitness function")
+    var discoveredInfoRewardedInFitness = false
+
+    @Experimental
+    @Cfg("During mutation, force the mutation of genes that have newly discovered specialization from previous fitness evaluations," +
+            " based on taint analysis.")
+    var taintForceSelectionOfGenesWithSpecialization = false
+
+    @Probability
+    @Cfg("Probability of removing a tainted value during mutation")
+    var taintRemoveProbability = 0.5
+
+    @Probability
+    @Cfg("Probability of applying a discovered specialization for a tainted value")
+    var taintApplySpecializationProbability = 0.5
+
+    @Probability
+    @Cfg("Probability of changing specialization for a resolved taint during mutation")
+    var taintChangeSpecializationProbability = 0.1
+
     @Min(0.0)
     @Max(stringLengthHardLimit.toDouble())
     @Cfg("The maximum length allowed for evolved strings. Without this limit, strings could in theory be" +
@@ -2054,7 +2134,7 @@ class EMConfig {
             " When EvoMaster mocks external services, mock server instances will run on local addresses starting from" +
             " this provided address." +
             " Min value is ${defaultExternalServiceIP}." +
-            " Lower values like ${ExternalServiceSharedUtils.RESERVED_RESOLVED_LOCAL_IP} are reserved.")
+            " Lower values like ${ExternalServiceSharedUtils.RESERVED_RESOLVED_LOCAL_IP} and ${ExternalServiceSharedUtils.DEFAULT_WM_LOCAL_IP} are reserved.")
     @Experimental
     @Regex(externalServiceIPRegex)
     var externalServiceIP : String = defaultExternalServiceIP
@@ -2154,15 +2234,13 @@ class EMConfig {
         private set
 
 
-    @Experimental
     @Cfg("In REST, specify probability of using 'default' values, if any is specified in the schema")
     @Probability(true)
-    var probRestDefault = 0.0
+    var probRestDefault = 0.20
 
-    @Experimental
     @Cfg("In REST, specify probability of using 'example(s)' values, if any is specified in the schema")
     @Probability(true)
-    var probRestExamples = 0.0
+    var probRestExamples = 0.05
 
 
     //TODO mark as deprecated once we support proper Robustness Testing
@@ -2173,39 +2251,86 @@ class EMConfig {
     @Cfg("Apply a security testing phase after functional test cases have been generated.")
     var security = false
 
-    val defaultConfigPath = "em.toml"
+
+    @Cfg("If there is no configuration file, create a default template at given configPath location." +
+            " However this is done only on the 'default' location. If you change 'configPath', no new file will be" +
+            " created.")
+    var createConfigPathIfMissing: Boolean = true
+
 
     @Experimental
-    @Cfg("File path for file with configuration settings")
-    @FilePath
-    var configPath: String = defaultConfigPath
-
-    @Experimental
-    @Cfg("If there is no configuration file, create a default template at given configPath location")
-    var createConfigPathIfMissing: Boolean = false
+    @Cfg("Extra checks on HTTP properties in returned responses, used as automated oracles to detect faults.")
+    var httpOracles = false
 
     fun timeLimitInSeconds(): Int {
         if (maxTimeInSeconds > 0) {
             return maxTimeInSeconds
         }
 
-        val h = maxTime.indexOf('h')
-        val m = maxTime.indexOf('m')
-        val s = maxTime.indexOf('s')
+        return convertToSeconds(maxTime)
+    }
+
+    fun improvementTimeoutInSeconds() : Int {
+        if(prematureStop.isNullOrBlank()){
+            return Int.MAX_VALUE
+        }
+        return convertToSeconds(prematureStop)
+    }
+
+    private fun convertToSeconds(time: String): Int {
+        val h = time.indexOf('h')
+        val m = time.indexOf('m')
+        val s = time.indexOf('s')
 
         val hours = if (h >= 0) {
-            maxTime.subSequence(0, h).toString().trim().toInt()
+            time.subSequence(0, h).toString().trim().toInt()
         } else 0
 
         val minutes = if (m >= 0) {
-            maxTime.subSequence(if (h >= 0) h + 1 else 0, m).toString().trim().toInt()
+            time.subSequence(if (h >= 0) h + 1 else 0, m).toString().trim().toInt()
         } else 0
 
         val seconds = if (s >= 0) {
-            maxTime.subSequence(if (m >= 0) m + 1 else (if (h >= 0) h + 1 else 0), s).toString().trim().toInt()
+            time.subSequence(if (m >= 0) m + 1 else (if (h >= 0) h + 1 else 0), s).toString().trim().toInt()
         } else 0
 
         return (hours * 60 * 60) + (minutes * 60) + seconds
+    }
+
+    @Experimental
+    @Cfg("How much data elements, per key, can be stored in the Data Pool." +
+            " Once limit is reached, new old will replace old data. ")
+    @Min(1.0)
+    var maxSizeDataPool = 100
+
+    @Experimental
+    @Cfg("Threshold of Levenshtein Distance for key-matching in Data Pool")
+    @Min(0.0)
+    var thresholdDistanceForDataPool = 2
+
+    @Experimental
+    @Cfg("Enable the collection of response data, to feed new individuals based on field names matching.")
+    var useResponseDataPool = false
+
+    @Experimental
+    @Probability(false)
+    @Cfg("Specify the probability of using the data pool when sampling test cases." +
+            " This is for black-box (bb) mode")
+    var bbProbabilityUseDataPool = 0.8
+
+    @Experimental
+    @Probability(false)
+    @Cfg("Specify the probability of using the data pool when sampling test cases." +
+            " This is for white-box (wb) mode")
+    var wbProbabilityUseDataPool = 0.2
+
+
+    fun getProbabilityUseDataPool() : Double{
+        return if(blackBox){
+            bbProbabilityUseDataPool
+        } else {
+            wbProbabilityUseDataPool
+        }
     }
 
     fun trackingEnabled() = isMIO() && (enableTrackEvaluatedIndividual || enableTrackIndividual)

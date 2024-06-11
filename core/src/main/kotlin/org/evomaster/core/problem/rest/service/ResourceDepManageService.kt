@@ -2,7 +2,6 @@ package org.evomaster.core.problem.rest.service
 
 import com.google.inject.Inject
 import org.evomaster.client.java.controller.api.dto.TestResultsDto
-import org.evomaster.client.java.controller.api.dto.database.execution.ExecutionDto
 import org.evomaster.core.EMConfig
 import org.evomaster.core.Lazy
 import org.evomaster.core.sql.SqlAction
@@ -357,9 +356,9 @@ class ResourceDepManageService {
             val tb = blistHeuristics[t]
 
             if (ta != null && tb != null) {
-                if (ta.distance > tb.distance)
+                if (ta.score > tb.score)
                     return 1
-                else if (ta.distance < tb.distance)
+                else if (ta.score < tb.score)
                     return -1
             }
         }
@@ -466,7 +465,7 @@ class ResourceDepManageService {
             val middles = seqCur.subList(swapsloc[0] + 1, swapsloc[1] + 1).map { it.getResourceNodeKey() }
             if (compare(swapsloc[0], current, swapsloc[1], previous) != 0) {
                 middles.forEach {
-                    updateDependencies(swapF.getResourceNodeKey(), mutableListOf(it), RestResourceStructureMutator.MutationType.SWAP.toString(), (1.0 / middles.size))
+                    updateDependencies(swapF.getResourceNodeKey(), mutableListOf(it), ResourceRestStructureMutator.MutationType.SWAP.toString(), (1.0 / middles.size))
                 }
             } else {
                 uncorrelated.getOrPut(swapF.getResourceNodeKey()) { mutableSetOf() }.apply {
@@ -507,7 +506,7 @@ class ResourceDepManageService {
                     } else
                         mutableListOf(swapB.getResourceNodeKey(), swapF.getResourceNodeKey())
 
-                    updateDependencies(seqKey, relyOn, RestResourceStructureMutator.MutationType.SWAP.toString())
+                    updateDependencies(seqKey, relyOn, ResourceRestStructureMutator.MutationType.SWAP.toString())
                 } else {
                     uncorrelated.getOrPut(seqKey) { mutableSetOf() }.apply {
                         add(swapB.getResourceNodeKey())
@@ -519,7 +518,7 @@ class ResourceDepManageService {
             val before = seqCur.subList(swapsloc[0], swapsloc[1]).map { it.getResourceNodeKey() }
             if (compare(swapsloc[1], current, swapsloc[0], previous) != 0) {
                 middles.forEach {
-                    updateDependencies(swapB.getResourceNodeKey(), mutableListOf(it), RestResourceStructureMutator.MutationType.SWAP.toString(), (1.0 / before.size))
+                    updateDependencies(swapB.getResourceNodeKey(), mutableListOf(it), ResourceRestStructureMutator.MutationType.SWAP.toString(), (1.0 / before.size))
                 }
             } else {
                 uncorrelated.getOrPut(swapB.getResourceNodeKey()) { mutableSetOf() }.addAll(before)
@@ -581,7 +580,7 @@ class ResourceDepManageService {
 
                 if (isAnyChange) {
                     val seqKey = seqCur[indexOfCalls].getResourceNodeKey()
-                    updateDependencies(seqKey, mutableListOf(modified.getResourceNodeKey()), RestResourceStructureMutator.MutationType.MODIFY.toString())
+                    updateDependencies(seqKey, mutableListOf(modified.getResourceNodeKey()), ResourceRestStructureMutator.MutationType.MODIFY.toString())
                 }
             }
         }
@@ -640,7 +639,7 @@ class ResourceDepManageService {
                     } else
                         mutableListOf(replaced.getResourceNodeKey(), replace.getResourceNodeKey())
 
-                    updateDependencies(seqKey, relyOn, RestResourceStructureMutator.MutationType.REPLACE.toString())
+                    updateDependencies(seqKey, relyOn, ResourceRestStructureMutator.MutationType.REPLACE.toString())
                 } else {
                     uncorrelated.getOrPut(seqKey) { mutableSetOf() }.apply {
                         add(replaced.getResourceNodeKey())
@@ -703,7 +702,7 @@ class ResourceDepManageService {
                 }
                 val seqKey = seqCur[indexOfCalls].getResourceNodeKey()
                 if (isAnyChange) {
-                    updateDependencies(seqKey, mutableListOf(addedKey), RestResourceStructureMutator.MutationType.ADD.toString())
+                    updateDependencies(seqKey, mutableListOf(addedKey), ResourceRestStructureMutator.MutationType.ADD.toString())
                 } else {
                     uncorrelated.getOrPut(seqKey) { mutableSetOf() }.add(addedKey)
                 }
@@ -769,7 +768,7 @@ class ResourceDepManageService {
 
                 val seqKey = seqCur[indexOfCalls].getResourceNodeKey()
                 if (isAnyChange) {
-                    updateDependencies(seqKey, mutableListOf(deleteKey), RestResourceStructureMutator.MutationType.DELETE.toString())
+                    updateDependencies(seqKey, mutableListOf(deleteKey), ResourceRestStructureMutator.MutationType.DELETE.toString())
                 } else {
                     uncorrelated.getOrPut(seqKey) { mutableSetOf() }.add(deleteKey)
                 }

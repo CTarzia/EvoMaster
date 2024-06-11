@@ -79,12 +79,18 @@ abstract class SearchAlgorithm<T> where T : Individual {
             }
         }
 
+        if(time.isImprovementTimeout()){
+            LoggingUtil.uniqueUserWarn("Premature stop of the search. No improvement in the last ${config.prematureStop}")
+        }
+
         handleAfterSearch()
 
         return archive.extractSolution()
     }
 
     private fun handleAfterSearch() {
+
+        time.doStopRecording()
 
         ssu.enabled = false
 

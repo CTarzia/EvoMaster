@@ -13,6 +13,7 @@ import org.evomaster.core.AnsiColor.Companion.inYellow
 import org.evomaster.core.config.ConfigProblemException
 import org.evomaster.core.logging.LoggingUtil
 import org.evomaster.core.output.OutputFormat
+import org.evomaster.core.output.Termination
 import org.evomaster.core.output.TestSuiteSplitter
 import org.evomaster.core.output.clustering.SplitResult
 import org.evomaster.core.output.service.EpaWriter
@@ -182,7 +183,6 @@ class Main {
             writeImpacts(injector, solution)
             writeExecuteInfo(injector)
 
-
             val stc = injector.getInstance(SearchTimeController::class.java)
 
             LoggingUtil.getInfoLogger().apply {
@@ -228,6 +228,8 @@ class Main {
             writeStatistics(injector, solution) //FIXME if other phases after search, might get skewed data on 100% snapshots...
             writeEPA(injector, solution)
 
+            resetExternalServiceHandler(injector)
+
             val statistics = injector.getInstance(Statistics::class.java)
             val data = statistics.getData(solution)
             val faults = solution.overall.potentialFoundFaults(idMapper)
@@ -239,6 +241,8 @@ class Main {
                 if (timeouts > 0) {
                     info("TCP timeouts: $timeouts")
                 }
+
+                info("Potential faults: ${faults.size}")
 
                 if (!config.blackBox || config.bbExperiments) {
                     val rc = injector.getInstance(RemoteController::class.java)
@@ -277,7 +281,6 @@ class Main {
                         //assert(linesInfo.total <= totalLines){ "WRONG COVERAGE: ${linesInfo.total} > $totalLines"}
 
                         info("Covered targets (lines, branches, faults, etc.): ${targetsInfo.total}")
-                        info("Potential faults: ${faults.size}")
 
                         if(totalLines == 0 || units == 0){
                             logError("Detected $totalLines lines to cover, for a total of $units units/classes." +
@@ -326,8 +329,6 @@ class Main {
                             " to run the search for longer, like for example something between '1h' and '24h' hours."))
                 }
             }
-
-            resetExternalServiceHandler(injector)
 
             solution.statistics = data.toMutableList()
             return solution
@@ -386,8 +387,15 @@ class Main {
                     if (config.blackBox) {
                         BlackBoxRestModule(config.bbExperiments)
                     } else if (config.isEnabledResourceStrategy()) {
+                        /*
+                            default for white-box testing using MIO
+                         */
                         ResourceRestModule()
                     } else {
+                        /*
+                            old, pre-resource handling, version for white-box testing.
+                            not deprecated, as algorithms different from MIO would still use this
+                         */
                         RestModule()
                     }
                 }
@@ -700,7 +708,14 @@ class Main {
                     .forEach { writer.writeTests(it, controllerInfoDto?.fullName,controllerInfoDto?.executableFullPath, snapshot) }
 
                 if (config.executiveSummary) {
-                    writeExecSummary(injector, controllerInfoDto, splitResult)
+
+                    // Onur - if there are fault cases, executive summary makes sense
+                    if ( splitResult.splitOutcome.any{ it.individuals.isNotEmpty()
+                                && it.termination != Termination.SUCCESSES}) {
+                        writeExecSummary(injector, controllerInfoDto, splitResult)
+                    }
+
+                    //writeExecSummary(injector, controllerInfoDto, splitResult)
                     //writeExecutiveSummary(injector, solution, controllerInfoDto, partialOracles)
                 }
             } else if (config.problemType == EMConfig.ProblemType.RPC){
@@ -710,12 +725,11 @@ class Main {
 
                 when(config.testSuiteSplitType){
                     EMConfig.TestSuiteSplitType.NONE -> writer.writeTests(solution, controllerInfoDto?.fullName, controllerInfoDto?.executableFullPath)
-                    EMConfig.TestSuiteSplitType.CODE -> throw IllegalStateException("RPC problem does not support splitting tests by code")
                     /*
                         for RPC, just simple split based on whether there exist any exception in a test
                         TODD need to check with Andrea whether we use cluster or other type
                      */
-                    EMConfig.TestSuiteSplitType.CLUSTER -> {
+                    EMConfig.TestSuiteSplitType.FAULTS -> {
                         val splitResult = TestSuiteSplitter.splitRPCByException(solution as Solution<RPCIndividual>)
                         splitResult.splitOutcome
                             .filter { !it.individuals.isNullOrEmpty() }
@@ -859,6 +873,10 @@ class Main {
                                      controllerInfoDto: ControllerInfoDto?,
                                      splitResult: SplitResult,
                                      snapshotTimestamp: String = "") {
+
+            val executiveSummary = splitResult.executiveSummary
+                    ?: return
+
             val config = injector.getInstance(EMConfig::class.java)
 
             if (!config.createTests) {
@@ -867,7 +885,7 @@ class Main {
 
             val writer = injector.getInstance(TestSuiteWriter::class.java)
             assert(controllerInfoDto == null || controllerInfoDto.fullName != null)
-            writer.writeTests(splitResult.executiveSummary, controllerInfoDto?.fullName,controllerInfoDto?.executableFullPath, snapshotTimestamp)
+            writer.writeTests(executiveSummary, controllerInfoDto?.fullName,controllerInfoDto?.executableFullPath, snapshotTimestamp)
         }
 
         /**
