@@ -195,19 +195,11 @@ class ResourceDepManageService {
                         val paramId = ar.getParamId(action.parameters, p)
                         val paramInfo = ar.paramsInfo[paramId].run {
                             this ?: ar.updateAdditionalParam(action, p).also {
-                                SimpleDeriveResourceBinding.deriveParamsToTable(paramId, it, ar, tables)
-                            }
+                                    SimpleDeriveResourceBinding.deriveParamsToTable(paramId, it, ar, tables)
+                                }
                         }
                         // ?:throw IllegalArgumentException("cannot find the param Id $paramId in the rest resource ${referResource.getName()}")
-                        val hasMatchedParam = SimpleDeriveResourceBinding.deriveRelatedTable(
-                            ar,
-                            paramId,
-                            paramInfo,
-                            mutableSetOf(t),
-                            p is BodyParam,
-                            -1,
-                            alltables = tables
-                        )
+                        val hasMatchedParam = SimpleDeriveResourceBinding.deriveRelatedTable(ar, paramId, paramInfo, mutableSetOf(t), p is BodyParam, -1, alltables = tables)
                         ar.resourceToTable.paramToTable[paramId]?.let { paramToTable ->
                             paramToTable.getRelatedColumn(t)?.apply {
                                 paramToTable.confirmedColumn.addAll(this.intersect(u.filter { it != "*" }))
