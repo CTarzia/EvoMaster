@@ -367,7 +367,7 @@ abstract class AbstractRestFitness : HttpWsFitness<RestIndividual>() {
             .filter { actionResults[it] is RestCallResult }
             .forEach {
                 val result = actionResults[it] as RestCallResult
-                val status = result.getStatusCode() ?: -1
+                val status = result.getStatusCode() ?: 1000
                 if (status >= 400) return //if the request failed we won't have new coverage of the EPA.
 
                 val actionName = actions[it].getName()
