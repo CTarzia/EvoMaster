@@ -1,6 +1,5 @@
 package org.evomaster.core.search.impact.impactinfocollection.value.collection
 
-import org.evomaster.core.logging.LoggingUtil
 import org.evomaster.core.search.gene.collection.EnumGene
 import org.evomaster.core.search.gene.Gene
 import org.evomaster.core.search.impact.impactinfocollection.*
@@ -36,12 +35,7 @@ class EnumGeneImpact (sharedImpactInfo: SharedImpactInfo, specificImpactInfo: Sp
         if (gc.current !is EnumGene<*>)
             throw IllegalStateException("gc.current (${gc.current::class.java.simpleName}) should be EnumGene")
 
-        try {
-            values[gc.current.index].countImpactAndPerformance(noImpactTargets = noImpactTargets, impactTargets = impactTargets, improvedTargets = improvedTargets, onlyManipulation = onlyManipulation, num = 1)
-        } catch (e : Exception) {
-            LoggingUtil.getInfoLogger().info("${e.message} --- ${e.cause}")
-            LoggingUtil.getInfoLogger().info("action: ${gc.actionLocalId}")
-        }
+        values[gc.current.index].countImpactAndPerformance(noImpactTargets = noImpactTargets, impactTargets = impactTargets, improvedTargets = improvedTargets, onlyManipulation = onlyManipulation, num = 1)
     }
 
     override fun validate(gene: Gene): Boolean = gene is EnumGene<*>
