@@ -16,6 +16,7 @@ import org.evomaster.core.output.OutputFormat
 import org.evomaster.core.output.Termination
 import org.evomaster.core.output.TestSuiteSplitter
 import org.evomaster.core.output.clustering.SplitResult
+import org.evomaster.core.output.service.EpaWriter
 import org.evomaster.core.output.service.TestSuiteWriter
 import org.evomaster.core.problem.api.ApiWsIndividual
 import org.evomaster.core.problem.externalservice.httpws.service.HarvestActualHttpWsResponseHandler
@@ -225,6 +226,7 @@ class Main {
             writeCoveredTargets(injector, solution)
             writeTests(injector, solution, controllerInfo)
             writeStatistics(injector, solution) //FIXME if other phases after search, might get skewed data on 100% snapshots...
+            writeEPA(injector, solution)
 
             resetExternalServiceHandler(injector)
 
@@ -793,6 +795,18 @@ class Main {
             if (config.snapshotInterval > 0) {
                 statistics.writeSnapshot()
             }
+        }
+
+        private fun writeEPA(injector: Injector, solution: Solution<*>) {
+
+            val config = injector.getInstance(EMConfig::class.java)
+
+            if (!config.epaCalculation) {
+                return
+            }
+
+            LoggingUtil.getInfoLogger().info("Going to write EPA to ${config.epaFile}.")
+            EpaWriter().writeEPA(solution, config.epaFile)
         }
 
         private fun writeOverallProcessData(injector: Injector) {

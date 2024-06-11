@@ -1,8 +1,12 @@
 package org.evomaster.core.problem.rest
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.google.common.annotations.VisibleForTesting
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import org.evomaster.core.problem.rest.epa.Enabled
+import org.evomaster.client.java.controller.api.dto.database.execution.epa.RestActions
 import org.evomaster.core.problem.httpws.HttpWsCallResult
 import org.evomaster.core.search.action.Action
 import org.evomaster.core.search.action.ActionResult
@@ -18,6 +22,9 @@ class RestCallResult : HttpWsCallResult {
 
     companion object {
         const val HEURISTICS_FOR_CHAINED_LOCATION = "HEURISTICS_FOR_CHAINED_LOCATION"
+        const val ENABLED_ENDPOINTS_BEFORE_ACTION = "ENABLED_ENDPOINTS_BEFORE_ACTION"
+        const val ENABLED_ENDPOINTS_AFTER_ACTION = "ENABLED_ENDPOINTS_AFTER_ACTION"
+        val mapper = jacksonObjectMapper()
     }
 
 
@@ -62,6 +69,14 @@ class RestCallResult : HttpWsCallResult {
      */
     fun setHeuristicsForChainedLocation(on: Boolean) = addResultValue(HEURISTICS_FOR_CHAINED_LOCATION, on.toString())
     fun getHeuristicsForChainedLocation(): Boolean = getResultValue(HEURISTICS_FOR_CHAINED_LOCATION)?.toBoolean() ?: false
+    fun setEnabledEndpointsBeforeAction(enabledActions: RestActions?) = addResultValue(ENABLED_ENDPOINTS_BEFORE_ACTION, mapper.writeValueAsString(enabledActions))
+    fun getEnabledEndpointsBeforeAction(): RestActions? {
+        return getResultValue(ENABLED_ENDPOINTS_BEFORE_ACTION)?.let { mapper.readValue<RestActions?>(it) }
+    }
+    fun setEnabledEndpointsAfterAction(enabledActions: Enabled?) = addResultValue(ENABLED_ENDPOINTS_AFTER_ACTION, mapper.writeValueAsString(enabledActions))
+    fun getEnabledEndpointsAfterAction(): Enabled? {
+        return getResultValue(ENABLED_ENDPOINTS_AFTER_ACTION)?.let { mapper.readValue<Enabled?>(it) }
+    }
 
     override fun matchedType(action: Action): Boolean {
         return action is RestCallAction

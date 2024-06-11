@@ -5,14 +5,18 @@ import org.evomaster.client.java.controller.api.EMTestUtils
 import org.evomaster.client.java.controller.api.dto.ActionDto
 import org.evomaster.client.java.controller.api.dto.AdditionalInfoDto
 import org.evomaster.client.java.controller.api.dto.TestResultsDto
+import org.evomaster.client.java.controller.api.dto.database.execution.epa.RestAction
+import org.evomaster.core.problem.rest.epa.Enabled
+import org.evomaster.client.java.controller.api.dto.database.execution.epa.RestActions
+import org.evomaster.client.java.controller.api.dto.database.execution.epa.RestActionsDto
 import org.evomaster.client.java.instrumentation.shared.ExternalServiceSharedUtils
 import org.evomaster.core.Lazy
 import org.evomaster.core.logging.LoggingUtil
 import org.evomaster.core.problem.externalservice.HostnameResolutionAction
 import org.evomaster.core.problem.externalservice.HostnameResolutionInfo
+import org.evomaster.core.problem.externalservice.httpws.HttpExternalServiceInfo
 import org.evomaster.core.problem.externalservice.httpws.service.HarvestActualHttpWsResponseHandler
 import org.evomaster.core.problem.externalservice.httpws.service.HttpWsExternalServiceHandler
-import org.evomaster.core.problem.externalservice.httpws.HttpExternalServiceInfo
 import org.evomaster.core.problem.httpws.auth.AuthUtils
 import org.evomaster.core.problem.httpws.service.HttpWsFitness
 import org.evomaster.core.problem.rest.*
@@ -24,11 +28,11 @@ import org.evomaster.core.problem.util.ParserDtoUtil
 import org.evomaster.core.remote.HttpClientFactory
 import org.evomaster.core.remote.SutProblemException
 import org.evomaster.core.remote.TcpUtils
-import org.evomaster.core.search.action.Action
-import org.evomaster.core.search.action.ActionResult
 import org.evomaster.core.search.FitnessValue
 import org.evomaster.core.search.GroupsOfChildren
+import org.evomaster.core.search.action.Action
 import org.evomaster.core.search.action.ActionFilter
+import org.evomaster.core.search.action.ActionResult
 import org.evomaster.core.search.gene.*
 import org.evomaster.core.search.gene.collection.EnumGene
 import org.evomaster.core.search.gene.optional.OptionalGene
@@ -354,6 +358,31 @@ abstract class AbstractRestFitness : HttpWsFitness<RestIndividual>() {
             }
     }
 
+    private fun handleEPATargets(
+        fv: FitnessValue,
+        actions: List<RestCallAction>,
+        actionResults: List<ActionResult>
+    ) {
+        (0 until actionResults.size)
+            .filter { actionResults[it] is RestCallResult }
+            .forEach {
+                val result = actionResults[it] as RestCallResult
+                val status = result.getStatusCode() ?: 1000
+                if (status >= 400) return //if the request failed we won't have new coverage of the EPA.
+
+                val actionName = actions[it].getName()
+                var endpointsBeforeAction = result.getEnabledEndpointsBeforeAction()
+                if (endpointsBeforeAction == null && it > 0) {
+                    endpointsBeforeAction = (actionResults[it - 1] as RestCallResult)
+                        .getEnabledEndpointsAfterAction()?.enabledRestActions
+                }
+                val endpointsAfterAction = result.getEnabledEndpointsAfterAction()?.enabledRestActions
+                if (endpointsBeforeAction != null && endpointsAfterAction != null) {
+                    val epaEdgeId = idMapper.handleLocalTarget("${endpointsBeforeAction.toStringForEPA()}:$actionName:${endpointsAfterAction.toStringForEPA()}")
+                    fv.updateTarget(epaEdgeId, 1.0, it)
+                }
+            }
+    }
 
     fun handleAdditionalOracleTargetDescription(
         fv: FitnessValue,
@@ -443,6 +472,10 @@ abstract class AbstractRestFitness : HttpWsFitness<RestIndividual>() {
 
         val rcr = RestCallResult(a.getLocalId())
         actionResults.add(rcr)
+
+        if(config.epaCalculation && actionResults.filterIsInstance<RestCallResult>().size == 1) { //it's the first rest call action
+            handlePreviousEnabledEndpoints(rcr)
+        }
 
         val response = try {
             createInvocation(a, chainState, cookies, tokens).invoke()
@@ -536,6 +569,10 @@ abstract class AbstractRestFitness : HttpWsFitness<RestIndividual>() {
 
         rcr.setStatusCode(response.status)
 
+        if (config.epaCalculation && response.status < 400) {// we only want what happens after the action if it is a valid action
+            handleEnabledEndpoints(rcr, a)
+        }
+
         handlePossibleConnectionClose(response)
 
         try {
@@ -610,17 +647,7 @@ abstract class AbstractRestFitness : HttpWsFitness<RestIndividual>() {
             null
         }
 
-        val fullUri = EMTestUtils.resolveLocation(locationHeader, baseUrl + path)!!
-            .let {
-                /*
-                    TODO this will be need to be done properly, and check if
-                    it is or not a valid char.
-                    Furthermore, likely needed to be done in resolveLocation,
-                    or at least check how RestAssured would behave
-                 */
-                //it.replace("\"", "")
-                GeneUtils.applyEscapes(it, GeneUtils.EscapeMode.URI, configuration.outputFormat)
-            }
+        val fullUri = getFullUri(locationHeader, baseUrl, path)
 
 
         val builder = if (a.produces.isEmpty()) {
@@ -707,6 +734,57 @@ abstract class AbstractRestFitness : HttpWsFitness<RestIndividual>() {
         return invocation
     }
 
+    private fun getFullUri(locationHeader: String?, baseUrl: String, path: String) : String {
+        return EMTestUtils.resolveLocation(locationHeader, baseUrl + path)!!
+            .let {
+                /*
+                    TODO this will be need to be done properly, and check if
+                    it is or not a valid char.
+                    Furthermore, likely needed to be done in resolveLocation,
+                    or at least check how RestAssured would behave
+                 */
+                //it.replace("\"", "")
+                GeneUtils.applyEscapes(it, GeneUtils.EscapeMode.URI, configuration.outputFormat)
+            }
+    }
+
+    protected fun handlePreviousEnabledEndpoints(
+        rcr: RestCallResult
+    ) {
+        val restActions = getEnabledRestActions()?.let {
+            RestActions.from(it)
+        }
+        restActions.let {
+            rcr.setEnabledEndpointsBeforeAction(it)
+        }
+    }
+
+    private fun getEnabledRestActions(): RestActionsDto? {
+        val fullUri = getFullUri(null, getBaseUrl(), "/enabledEndpoints")
+        val r: Response = client.target(fullUri)
+            .request(MediaType.APPLICATION_JSON_TYPE)
+            .get()
+        return if (Response.Status.Family.SUCCESSFUL == r.statusInfo.family) {
+            r.readEntity(RestActionsDto::class.java)
+        } else {
+            null
+        }
+    }
+
+    private fun handleEnabledEndpoints(rcr: RestCallResult, a: RestCallAction) {
+        val restActions = getEnabledRestActions()?.let {
+            RestActions.from(it)
+        }
+        val enabled = restActions?.let {
+            Enabled(
+                RestAction(
+                    a.verb.name,
+                    a.path.toString()
+                ), it
+            )
+        }
+        enabled?.let { rcr.setEnabledEndpointsAfterAction(it) }
+    }
 
     private fun handleSaveLocation(
         a: RestCallAction,
@@ -794,6 +872,16 @@ abstract class AbstractRestFitness : HttpWsFitness<RestIndividual>() {
             actionResults,
             dto.additionalInfoList
         )
+
+        if (config.heuristicsForEpa) {
+            handleEPATargets(
+                fv,
+                individual.seeAllActions().filterIsInstance<RestCallAction>(),
+                actionResults
+            )
+        }
+
+        handleExternalServiceInfo(individual, fv, dto.additionalInfoList)
 
         val wmStarted = handleExternalServiceInfo(individual, fv, dto.additionalInfoList)
         if(wmStarted){

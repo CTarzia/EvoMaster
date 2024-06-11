@@ -550,6 +550,10 @@ class EMConfig {
                     "Their sum should be lower or equal to 1.")
         }
 
+        if (heuristicsForEpa && !epaCalculation) {
+            throw ConfigProblemException("Cannot collect heuristics for EPAs if 'epaCalculation' is not enabled.")
+        }
+
         if(security && !minimize){
             throw ConfigProblemException("The use of 'security' requires 'minimize'")
         }
@@ -1306,6 +1310,18 @@ class EMConfig {
     @Experimental
     @Cfg("Tracking of Mongo commands to improve test generation")
     var heuristicsForMongo = false
+
+    @Experimental
+    @Cfg("Creates an EPA for the tested *REST API*. Requires the implementation of the endpoint /enabledEndpoints.")
+    var epaCalculation = false
+
+    @Experimental
+    @Cfg("Tracking of EPA edges to improve test generation. Requires epaCalculation config.")
+    var heuristicsForEpa = false
+
+    @Cfg("Specify a path to save the EPA. Needs to end in a .dot file. Requires epaCalculation config.")
+    @FilePath
+    var epaFile = "epa.dot"
 
     @Cfg("Enable extracting SQL execution info")
     var extractSqlExecutionInfo = true
