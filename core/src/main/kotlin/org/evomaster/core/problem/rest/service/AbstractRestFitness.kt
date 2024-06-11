@@ -17,7 +17,6 @@ import org.evomaster.core.problem.externalservice.HostnameResolutionInfo
 import org.evomaster.core.problem.externalservice.httpws.HttpExternalServiceInfo
 import org.evomaster.core.problem.externalservice.httpws.service.HarvestActualHttpWsResponseHandler
 import org.evomaster.core.problem.externalservice.httpws.service.HttpWsExternalServiceHandler
-import org.evomaster.core.problem.externalservice.httpws.HttpExternalServiceInfo
 import org.evomaster.core.problem.httpws.auth.AuthUtils
 import org.evomaster.core.problem.httpws.service.HttpWsFitness
 import org.evomaster.core.problem.rest.*
@@ -31,6 +30,7 @@ import org.evomaster.core.remote.SutProblemException
 import org.evomaster.core.remote.TcpUtils
 import org.evomaster.core.search.FitnessValue
 import org.evomaster.core.search.GroupsOfChildren
+import org.evomaster.core.search.action.Action
 import org.evomaster.core.search.action.ActionFilter
 import org.evomaster.core.search.action.ActionResult
 import org.evomaster.core.search.gene.*

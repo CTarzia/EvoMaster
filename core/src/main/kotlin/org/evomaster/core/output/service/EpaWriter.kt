@@ -47,36 +47,17 @@ class EpaWriter {
                 }
             }
         }
-        writeToFile(epa, timeLimit, epaFile, epaStatsCsv)
+        writeToFile(epa, epaFile)
     }
 
-    private fun writeToFile(epa: EPA, timeLimit: Int, epaFile: String, epaStatsCsv: String) {
-        var path = Paths.get(epaFile).toAbsolutePath()
+    private fun writeToFile(epa: EPA, epaFile: String) {
+        val path = Paths.get(epaFile).toAbsolutePath()
 
         Files.createDirectories(path.parent)
         Files.deleteIfExists(path)
         Files.createFile(path)
 
         path.toFile().appendText(toDOT(epa))
-
-        path = Paths.get("$epaFile.txt").toAbsolutePath()
-        Files.createDirectories(path.parent)
-        Files.deleteIfExists(path)
-        Files.createFile(path)
-
-        val v = epa.getVertexCount()
-        val e = epa.getEdgeCount()
-        val s = "EPA contains $v vertex(es) and $e edge(s)."
-        path.toFile().appendText(s)
-        LoggingUtil.getInfoLogger().info(s)
-
-        path = Paths.get(epaStatsCsv).toAbsolutePath()
-        Files.createDirectories(path.parent)
-        val f = path.toFile()
-        if (f.length().toInt() == 0) {
-            f.appendText("timeLimitInSeconds, vertexes, edges \n")
-        }
-        f.appendText("${timeLimit}, $v, $e\n")
     }
 
     private fun toDOT(epa: EPA): String {

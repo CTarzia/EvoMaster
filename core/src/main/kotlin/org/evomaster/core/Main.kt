@@ -230,8 +230,6 @@ class Main {
 
             resetExternalServiceHandler(injector)
 
-            resetExternalServiceHandler(injector)
-
             val statistics = injector.getInstance(Statistics::class.java)
             val data = statistics.getData(solution)
             val faults = solution.overall.potentialFoundFaults(idMapper)
