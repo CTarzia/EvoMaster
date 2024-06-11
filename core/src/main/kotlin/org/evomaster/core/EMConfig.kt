@@ -553,7 +553,7 @@ class EMConfig {
         if (heuristicsForEpa && !epaCalculation) {
             throw ConfigProblemException("Cannot collect heuristics for EPAs if 'epaCalculation' is not enabled.")
         }
-        
+
         if(security && !minimize){
             throw ConfigProblemException("The use of 'security' requires 'minimize'")
         }
