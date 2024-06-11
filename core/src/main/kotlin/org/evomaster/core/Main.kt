@@ -806,7 +806,7 @@ class Main {
             }
 
             LoggingUtil.getInfoLogger().info("Going to write EPA to ${config.epaFile}.")
-            EpaWriter().writeEPA(solution, config.timeLimitInSeconds(), config.epaFile, config.epaStatsCsv)
+            EpaWriter().writeEPA(solution, config.epaFile)
         }
 
         private fun writeOverallProcessData(injector: Injector) {

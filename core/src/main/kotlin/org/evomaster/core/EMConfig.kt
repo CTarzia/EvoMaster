@@ -1323,10 +1323,6 @@ class EMConfig {
     @FilePath
     var epaFile = "epa.dot"
 
-    @Cfg("Specify a path to save the EPA stats. Needs to end in a .csv file. Requires epaCalculation config. Columns mean: timeLimitInSeconds, vertexes, edges.")
-    @FilePath
-    var epaStatsCsv = "epaStats.csv"
-
     @Cfg("Enable extracting SQL execution info")
     var extractSqlExecutionInfo = true
 

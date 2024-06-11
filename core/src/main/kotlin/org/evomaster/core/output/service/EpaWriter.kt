@@ -17,7 +17,7 @@ class EpaWriter {
             "edge [fontname=Courier fontsize=14]\n" +
             "init [shape=box]\n"
 
-    fun writeEPA(solution: Solution<*>, timeLimit: Int, epaFile: String, epaStatsCsv: String) {
+    fun writeEPA(solution: Solution<*>, epaFile: String) {
         val epa = EPA()
         for (i in solution.individuals) {
             var previousVertex: Vertex? = null
